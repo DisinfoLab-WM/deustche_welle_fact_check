@@ -145,9 +145,25 @@ for idx, link in enumerate(article_links, start=1):
 
     print(f"Processed article: {title}")
 
-# Step 6: Save articles data to a JSON file
-with open("articles_data.json", "w", encoding="utf-8") as json_file:
-    json.dump(articles_data, json_file, indent=4, ensure_ascii=False)
+# Step 6: Re‑format and save articles data to JSON
+output = {"articles": {}}
+
+for idx, art in enumerate(articles_data):
+    # join your list of authors into a single string
+    author_str = ", ".join(art["authors"])
+    
+    # build the per‑article entry
+    output["articles"][str(idx)] = {
+        "title":                 art["title"],
+        "text":                  art["text"],
+        "author":                author_str,
+        "date_published":        art["date_published"],       
+        "unix_date_published":   art["unix_date_published"],
+        "organization_country":  art["site_location"],
+        "site_name":             art["site_name"],
+        "url":                   art["url"],
+        "language":              "en"
+    }
 
 # Close the WebDriver
 driver.quit()
