@@ -3,7 +3,7 @@ import json
 import time  # Import the time module
 import re  # Importing regex for HTML parsing
 import requests
-import xml.etree.ElementTree as ET
+
 
 # DW RSS Feed URL
 rss_url = "https://rss.dw.com/rdf/rss-en-all"
