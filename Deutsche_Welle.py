@@ -18,8 +18,6 @@ def remove_html_tags(text):
 # Loop through RSS entries and store in the dictionary
 for index, entry in enumerate(feed.entries):
     link = entry.link
-    if "fact-check" not in link:
-        continue
     # Extract full text from content or description
     full_text = entry.content[0].value if 'content' in entry else entry.description
     full_text = remove_html_tags(full_text)  # Clean HTML tags
