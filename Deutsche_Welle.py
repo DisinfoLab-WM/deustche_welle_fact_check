@@ -4,7 +4,6 @@ import time  # Import the time module
 import re  # Importing regex for HTML parsing
 import requests
 
-
 # DW RSS Feed URL
 rss_url = "https://rss.dw.com/rdf/rss-en-all"
 # Parse RSS Feed
@@ -18,6 +17,9 @@ def remove_html_tags(text):
     return re.sub(clean, '', text)
 # Loop through RSS entries and store in the dictionary
 for index, entry in enumerate(feed.entries):
+    link = entry.link
+    if "fact-check" not in link:
+        continue
     # Extract full text from content or description
     full_text = entry.content[0].value if 'content' in entry else entry.description
     full_text = remove_html_tags(full_text)  # Clean HTML tags
@@ -28,12 +30,12 @@ for index, entry in enumerate(feed.entries):
     articles["articles"][str(index)] = {
         "title": entry.title,
         "text": full_text.strip(),  # Use full text if available and strip whitespace
-        "author": "",#entry.author,  # Use 'Unknown' if creator is not available
+        "author": "", #entry.author, 
         "date_published": date_published,
-        "unix_date_published": time.mktime(date_published) if date_published else None,  # Corrected to use time.mktime
+        "unix_date_published": time.mktime(date_published) if date_published else None,  
         "organization_country": "Germany", 
         "site_name": "Deutsche_Welle",
-        "url": entry.link,
+        "url": link,
         "language": "en",  
     }
 # Save articles to a local JSON file
