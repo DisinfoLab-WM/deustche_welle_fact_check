@@ -1,169 +1,42 @@
+import feedparser
 import json
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import TimeoutException, NoSuchElementException
-from webdriver_manager.chrome import ChromeDriverManager
-import time
-from bs4 import BeautifulSoup
-import re
-from datetime import datetime
-import pytz
-import os
+import time  # Import the time module
+import re  # Importing regex for HTML parsing
+import requests
+import xml.etree.ElementTree as ET
 
-# Set up Selenium WebDriver with Chrome
-options = Options()
-options.add_argument("--headless")  # Uncomment for headless mode
-service = Service(ChromeDriverManager().install())
-driver = webdriver.Chrome(service=service, options=options)
+# DW RSS Feed URL
+rss_url = "https://rss.dw.com/rdf/rss-en-all"
+# Parse RSS Feed
+feed = feedparser.parse(rss_url)
 
-# Initialize WebDriver wait
-wait = WebDriverWait(driver, 1)
-
-# URL of the DW Fact Check section
-section_url = "https://www.dw.com/en/fact-check/t-56584214"
-
-# Step 1: Load the page
-driver.get(section_url)
-
-# Step 2: Click "Show more" until no more button is found
-while True:
-    try:
-        # Wait for the 'Show more' button to be clickable and click it
-        show_more_button = wait.until(EC.element_to_be_clickable((By.XPATH, "//div[@role='button'][contains(text(), 'Show more')]")))
-        show_more_button.click()
-        time.sleep(2)  # Wait for new articles to load
-    except (TimeoutException, NoSuchElementException):
-        print("No more 'Show more' button found.")
-        break
-
-# Step 3: Extract article links from the page
-soup = BeautifulSoup(driver.page_source, "html.parser")
-article_links = []
-
-# Define a list of keywords for non-article content
-non_article_keywords = [
-    "how-to-reach-dw-fact-check",
-    "accessibility-statement",
-    "legal-notice",
-    "meet-the-team",
-    "how-dw-fact-checks-fake-news"
-    # "dossier-team-dw-fact-check",
-    # "european-union-general-data-protection-regulation-gdpr-valid-may-25-2018"
-]
-
-non_article_links = [
-    "https://www.dw.com/en/dossier-team-dw-fact-check/a-66713297",
-    "https://www.dw.com/en/european-union-general-data-protection-regulation-gdpr-valid-may-25-2018/a-63500655",
-    "https://www.dw.com/en/how-to-spot-fake-news-propaganda-deepfakes-disinformation-bots-or-ai-fakes-with-fact-checking/a-67738458"
-]
-
-# Find all article links in the central cluster
-for a_tag in soup.find_all("a", href=True):
-    href = a_tag['href']
-    # Filter for article links in the format '/en/slug/a-<digits>'
-    if re.match(r'^/en/[^/]+/a-\d+$', href):
-        # Exclude non-article content based on keywords
-        if not any(keyword in href for keyword in non_article_keywords):
-            full_url = "https://www.dw.com" + href
-            if full_url not in article_links:
-                if full_url not in non_article_links:
-                    # print(full_url)
-                    article_links.append(full_url)
-
-if len(article_links) < 31:
-    print(len("not enough article links found, trying again"))
-    os.system("python3 main.py")
-    
-
-print(f"Found {len(article_links)} articles.")
-
-# Step 4: Create a list to store articles
-articles_data = []
-
-# Step 5: Visit each article, extract title, author, date, and save it
-for idx, link in enumerate(article_links, start=1):
-    driver.get(link)
-
-    article_soup = BeautifulSoup(driver.page_source, "html.parser")
-    
-    # Extract title
-    title_tag = article_soup.find("h1")
-    title = title_tag.text.strip() if title_tag else "No title"
-
-    # Extract authors
-    authors = []
-    author_tags = article_soup.find_all("a", class_=lambda class_name: class_name and "author" in class_name)
-    for tag in author_tags:
-        author_name = tag.get_text(strip=True)
-        if author_name:  # Ensure non-empty author names
-            if author_name not in authors:
-                authors.append(author_name)
-
-    # Remove any empty strings or whitespace-only entries
-    authors = [author.strip() for author in authors if author.strip()]
-
-    # Extract publication date
-    time_tag = article_soup.find("time", {"aria-hidden": "true"})
-    date_published = time_tag.get_text(strip=True) if time_tag else "Unknown"
-    # Convert publication date to Unix timestamp and reformat to "YYYY-MM-DD"
-    if date_published != "Unknown":
-        try:
-            # Parse the date using the current format
-            date_obj = datetime.strptime(date_published, "%m/%d/%Y")
-            # Format the date to "YYYY-MM-DD"
-            date_published = date_obj.strftime("%Y-%m-%d")
-            unix_date_published = int(date_obj.timestamp())
-        except ValueError:
-            date_published = "Unknown"
-            unix_date_published = None
-    else:
-        unix_date_published = None
-
-    # Site details
-    site_location = "Germany"  # DW is a German news outlet
-    site_name = "Deutsche Welle"
-
-    # Extract article paragraphs
-    paragraphs = article_soup.select("section div p")
-    article_text = "\n\n".join(p.get_text(strip=True) for p in paragraphs)
-
-    # Append article data to the list
-    articles_data.append({
-        "text": article_text,
-        "title": title,
-        "authors": authors,
+# Initialize the articles dictionary
+articles = {"articles": {}}
+# Function to remove HTML tags from text
+def remove_html_tags(text):
+    clean = re.compile('<.*?>')
+    return re.sub(clean, '', text)
+# Loop through RSS entries and store in the dictionary
+for index, entry in enumerate(feed.entries):
+    # Extract full text from content or description
+    full_text = entry.content[0].value if 'content' in entry else entry.description
+    full_text = remove_html_tags(full_text)  # Clean HTML tags
+    dfs = entry.get("dc:date", "")
+    # dfs =  entry.get("published")
+    date_published = dfs
+    # date_published = f'{dfs[0]}-{"{:02d}".format(dfs[1])}-{"{:02d}".format(dfs[2])} {"{:02d}".format(dfs[3])}:{"{:02d}".format(dfs[4])}:{"{:02d}".format(dfs[5])}'
+    articles["articles"][str(index)] = {
+        "title": entry.title,
+        "text": full_text.strip(),  # Use full text if available and strip whitespace
+        "author": "",#entry.author,  # Use 'Unknown' if creator is not available
         "date_published": date_published,
-        "unix_date_published": unix_date_published,
-        "site_location": site_location,
-        "site_name": site_name,
-        "url": link
-    })
-
-    print(f"Processed article: {title}")
-
-# Step 6: Re‑format and save articles data to JSON
-output = {"articles": {}}
-
-for idx, art in enumerate(articles_data):
-    # join your list of authors into a single string
-    author_str = ", ".join(art["authors"])
-    
-    # build the per‑article entry
-    output["articles"][str(idx)] = {
-        "title":                 art["title"],
-        "text":                  art["text"],
-        "author":                author_str,
-        "date_published":        art["date_published"],       
-        "unix_date_published":   art["unix_date_published"],
-        "organization_country":  art["site_location"],
-        "site_name":             art["site_name"],
-        "url":                   art["url"],
-        "language":              "en"
+        "unix_date_published": time.mktime(date_published) if date_published else None,  # Corrected to use time.mktime
+        "organization_country": "Germany", 
+        "site_name": "Deutsche_Welle",
+        "url": entry.link,
+        "language": "en",  
     }
-
-# Close the WebDriver
-driver.quit()
+# Save articles to a local JSON file
+with open("DW.json", "w", encoding='utf-8') as json_file:
+    json.dump(articles, json_file, indent=4, ensure_ascii=False)
+print("Articles saved locally in DW.json!")
